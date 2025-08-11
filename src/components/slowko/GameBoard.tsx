@@ -21,12 +21,13 @@ export default function GameBoard({ rows, cols, guesses, states, currentGuess, s
         const guess = isSubmitted ? guesses[rowIdx] : isCurrent ? currentGuess : "";
         const rowStates: (LetterState | "empty")[] = isSubmitted
           ? states[rowIdx]
-          : Array.from({ length: cols }).map((__, i) => (guess[i] ? "empty" : "empty"));
+          : Array.from({ length: cols }).map(() => "empty");
 
         return (
           <div
             key={rowIdx}
-            className={["grid grid-cols-5 gap-2 mx-auto", shakingRow === rowIdx ? "animate-shake" : ""].join(" ")}
+            className={["grid gap-2 mx-auto", shakingRow === rowIdx ? "animate-shake" : ""].join(" ")}
+            style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, width: `min(100%, ${cols * 3.2}rem)` }}
             role="group"
             aria-label={`rząd ${rowIdx + 1}`}
           >
@@ -40,7 +41,7 @@ export default function GameBoard({ rows, cols, guesses, states, currentGuess, s
                   letter={letter}
                   state={st}
                   shouldReveal={shouldReveal}
-                  revealDelay={colIdx * 120}
+                  revealDelay={colIdx * 100}
                 />
               );
             })}

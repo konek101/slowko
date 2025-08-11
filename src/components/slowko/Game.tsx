@@ -1,14 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import GameBoard from "./GameBoard";
 import Keyboard from "./Keyboard";
+import SettingsBar from "./SettingsBar";
 import { evaluateGuess, isAllowedChar, LetterState, normalizeInput } from "@/utils/wordUtils";
-import { pickSolutionForToday } from "@/data/polishWords";
+import { POLISH_FIVE_LETTER_WORDS, pickSolutionForToday } from "@/data/polishWords";
+import { loadDictionary, Dictionary } from "@/data/dictionary";
 import { useToast } from "@/hooks/use-toast";
-
-const ROWS = 6;
-const COLS = 5;
-
-type GameStatus = "playing" | "won" | "lost";
 
 function bestStatus(prev?: LetterState, next?: LetterState): LetterState | undefined {
   const rank: Record<LetterState, number> = { absent: 0, present: 1, correct: 2, empty: -1 } as any;
@@ -17,17 +14,60 @@ function bestStatus(prev?: LetterState, next?: LetterState): LetterState | undef
   return rank[next] >= rank[prev] ? next : prev;
 }
 
+function pickSolutionFromDict(dict: Dictionary | null, length: number) {
+  const d = new Date();
+  const seed = d.getFullYear() * 1000 + (d.getMonth() + 1) * 50 + d.getDate() + length;
+  const list = dict?.get(length) ? Array.from(dict!.get(length)!) : POLISH_FIVE_LETTER_WORDS;
+  const idx = Math.abs(seed) % list.length;
+  return list[idx];
+}
+
 export default function Game() {
   const { toast } = useToast();
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  const solution = useMemo(() => pickSolutionForToday(), []);
+  // Settings
+  const [wordLength, setWordLength] = useState<number>(5);
+  const [maxAttempts, setMaxAttempts] = useState<number>(6);
+
+  // Dictionary
+  const [dict, setDict] = useState<Dictionary | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      setLoading(true);
+      const d = await loadDictionary();
+      if (mounted) {
+        setDict(d);
+        setLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  // Game state
+  const [solution, setSolution] = useState<string>(() => pickSolutionForToday());
   const [guesses, setGuesses] = useState<string[]>([]);
   const [states, setStates] = useState<LetterState[][]>([]);
   const [currentGuess, setCurrentGuess] = useState<string>("");
-  const [status, setStatus] = useState<GameStatus>("playing");
+  const [status, setStatus] = useState<"playing" | "won" | "lost">("playing");
   const [shakingRow, setShakingRow] = useState<number | null>(null);
   const [letterStatus, setLetterStatus] = useState<Record<string, LetterState>>({});
+
+  // Refresh solution when settings or dict change
+  useEffect(() => {
+    const sol = pickSolutionFromDict(dict, wordLength);
+    setSolution(sol.toUpperCase());
+    // Hard reset when settings change
+    setGuesses([]);
+    setStates([]);
+    setCurrentGuess("");
+    setStatus("playing");
+    setShakingRow(null);
+    setLetterStatus({});
+  }, [dict, wordLength]);
 
   const onMouseMove = useCallback((e: React.MouseEvent) => {
     const el = containerRef.current;
@@ -41,10 +81,19 @@ export default function Game() {
 
   const submitGuess = useCallback(() => {
     if (status !== "playing") return;
-    if (currentGuess.length < COLS) {
+    if (currentGuess.length < wordLength) {
       setShakingRow(guesses.length);
       setTimeout(() => setShakingRow(null), 650);
-      toast({ title: "Za krótko", description: "Wpisz 5-literowe słowo." });
+      toast({ title: "Za krótko", description: `Wpisz ${wordLength}-literowe słowo.` });
+      return;
+    }
+
+    // Validate against dictionary (if available for given length)
+    const validSet = dict?.get(wordLength);
+    if (validSet && !validSet.has(currentGuess.toUpperCase())) {
+      setShakingRow(guesses.length);
+      setTimeout(() => setShakingRow(null), 650);
+      toast({ title: "Nie ma takiego słowa", description: "Spróbuj inne." });
       return;
     }
 
@@ -59,7 +108,7 @@ export default function Game() {
     // Update keyboard status
     setLetterStatus((prev) => {
       const next = { ...prev };
-      for (let i = 0; i < COLS; i++) {
+      for (let i = 0; i < wordLength; i++) {
         const ch = newGuesses[newGuesses.length - 1][i];
         const st = evalStates[i];
         const best = bestStatus(next[ch], st);
@@ -74,11 +123,11 @@ export default function Game() {
       toast({ title: "Brawo!", description: "Zgadłeś/zgadłaś hasło!" });
       return;
     }
-    if (newGuesses.length >= ROWS) {
+    if (newGuesses.length >= maxAttempts) {
       setStatus("lost");
       toast({ title: "Koniec gry", description: `Hasło: ${solution}` });
     }
-  }, [COLS, ROWS, currentGuess, guesses, solution, states, status, toast]);
+  }, [currentGuess, dict, guesses, maxAttempts, solution, status, toast, wordLength]);
 
   const handleKey = useCallback(
     (raw: string) => {
@@ -94,12 +143,12 @@ export default function Game() {
         return;
       }
 
-      if (currentGuess.length >= COLS) return;
+      if (currentGuess.length >= wordLength) return;
       if (!isAllowedChar(key)) return;
 
-      setCurrentGuess((g) => (g + key).slice(0, COLS));
+      setCurrentGuess((g) => (g + key).slice(0, wordLength));
     },
-    [status, submitGuess, currentGuess.length]
+    [status, submitGuess, currentGuess.length, wordLength]
   );
 
   useEffect(() => {
@@ -125,6 +174,24 @@ export default function Game() {
     setLetterStatus({});
   };
 
+  const onSettingsChange = (data: { length?: number; attempts?: number }) => {
+    if (data.length) setWordLength(data.length);
+    if (data.attempts) setMaxAttempts(data.attempts);
+  };
+
+  if (loading) {
+    return (
+      <div className="rounded-xl border p-6 animate-fade-in">
+        <div className="h-6 w-32 bg-muted rounded mb-4" />
+        <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(5, minmax(0, 1fr))` }}>
+          {Array.from({ length: 15 }).map((_, i) => (
+            <div key={i} className="tile tile-empty animate-pulse" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       ref={containerRef}
@@ -136,15 +203,16 @@ export default function Game() {
       <div className="relative">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg md:text-xl font-semibold tracking-tight">Słówko</h3>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-3">
+            <SettingsBar length={wordLength} attempts={maxAttempts} onChange={onSettingsChange} />
             <button className="kbd" onClick={reset} aria-label="nowa gra">Nowa gra</button>
           </div>
         </div>
 
         <div className="flex flex-col items-center gap-6">
           <GameBoard
-            rows={ROWS}
-            cols={COLS}
+            rows={maxAttempts}
+            cols={wordLength}
             guesses={guesses}
             states={states}
             currentGuess={currentGuess}
@@ -158,7 +226,7 @@ export default function Game() {
         </div>
 
         <p className="mt-6 text-center text-sm text-muted-foreground">
-          Zgadnij 5-literowe słowo w 6 próbach. Po każdej próbie kafelki pokażą, jak blisko jesteś.
+          Zgadnij {wordLength}-literowe słowo w {maxAttempts} próbach. Po każdej próbie kafelki pokażą, jak blisko jesteś.
         </p>
       </div>
     </div>
