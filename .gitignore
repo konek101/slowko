@@ -8,6 +8,12 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
+
+# Sensitive environment variables
+.env
+
+# Modules + built files
+node_modules
 dist
 dist-ssr
 *.local
