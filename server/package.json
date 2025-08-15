@@ -1,0 +1,36 @@
+{
+  "name": "getting-starter-activity-server",
+  "version": "1.0.0",
+  "description": "",
+  "main": "dist/server.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "dev": "tsx watch server.ts",
+    "fonts:fetch": "tsx scripts/fetch-font.ts",
+    "postinstall": "tsx scripts/fetch-font.ts",
+    "entrypoint:register": "tsx scripts/register-entrypoint.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@fontsource/inter": "^5.0.19",
+    "@fontsource/noto-sans": "^5.0.19",
+    "@resvg/resvg-js": "^2.6.2",
+    "cheerio": "^1.1.2",
+    "discord.js": "^14.21.0",
+    "dotenv": "^16.4.1",
+    "express": "^4.18.2",
+    "jimp": "^0.22.12",
+    "node-fetch": "^3.3.2",
+    "pngjs": "^7.0.0",
+    "tweetnacl": "^1.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "typescript": "^5.5.4",
+    "tsx": "^4.15.7"
+  }
+}
